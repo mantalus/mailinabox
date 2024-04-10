@@ -16,7 +16,8 @@ if [ "$(date "+%u")" -eq 1 ]; then
 fi
 
 # Take a backup.
-management/backup.py 2>&1 | management/email_administrator.py "Backup Status"
+# Backup no longer required as we are using AWS Backup for EFS and EBS volumes
+# management/backup.py 2>&1 | management/email_administrator.py "Backup Status"
 
 # Provision any new certificates for new domains or domains with expiring certificates.
 management/ssl_certificates.py -q  2>&1 | management/email_administrator.py "TLS Certificate Provisioning Result"
