@@ -895,7 +895,7 @@ def list_apt_updates(apt_update=True):
 def what_version_is_this(env):
     # This function runs `git rev-parse --abbrev-ref HEAD | awk -F'-' '{print $3}'`
     # on the Mail-in-a-Box installation directory. It will return the version
-    # based on the branch name. If the branch name is "master", it will return
+    # based on the MIAB Mantalus branch name. EG release/aws-stable-v68 returns "v68"
     miab_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     command = "/usr/bin/git rev-parse --abbrev-ref HEAD | awk -F'-' '{print $3}'"
     return subprocess.check_output(command, shell=True, env={"GIT_DIR": os.path.join(miab_dir, '.git')}).decode().strip()
