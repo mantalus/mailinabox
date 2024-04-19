@@ -928,7 +928,7 @@ def check_miab_version(env, output):
 		elif latest_ver is None:
 			output.print_error("Latest Mail-in-a-Box version could not be determined. You are running version %s." % this_ver)
 		else:
-			output.print_error(f"A new version of Mail-in-a-Box is available. You are running version {this_ver}. The latest version is {latest_ver}. For upgrade instructions, see https://mailinabox.email. ")
+			output.print_error(f"A new version of Mail-in-a-Box is available. You are running version {this_ver}. The latest version is {latest_ver}. Please contact Mantalus to schedule an upgrade as this requires additional testing. ")
 
 def run_and_output_changes(env, pool):
 	import json
