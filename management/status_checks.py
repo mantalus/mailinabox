@@ -4,7 +4,7 @@
 # TLS certificates have been signed, etc., and if not tells the user
 # what to do next.
 
-import sys, os, os.path, re, datetime, multiprocessing.pool
+import sys, os, os.path, re, datetime, multiprocessing.pool, subprocess
 import asyncio
 
 import dns.reversename, dns.resolver
@@ -893,11 +893,12 @@ def list_apt_updates(apt_update=True):
 	return pkgs
 
 def what_version_is_this(env):
-	# This function runs `git describe --always --abbrev=0` on the Mail-in-a-Box installation directory.
-	# Git may not be installed and Mail-in-a-Box may not have been cloned from github,
-	# so this function may raise all sorts of exceptions.
-	miab_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-	return shell("check_output", ["/usr/bin/git", "describe", "--always", "--abbrev=0"], env={"GIT_DIR": os.path.join(miab_dir, '.git')}).strip()
+    # This function runs `git rev-parse --abbrev-ref HEAD | awk -F'-' '{print $3}'`
+    # on the Mail-in-a-Box installation directory. It will return the version
+    # based on the MIAB Mantalus branch name. EG release/aws-stable-v68 returns "v68"
+    miab_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    command = "/usr/bin/git rev-parse --abbrev-ref HEAD | awk -F'-' '{print $3}'"
+    return subprocess.check_output(command, shell=True, env={"GIT_DIR": os.path.join(miab_dir, '.git')}).decode().strip()
 
 def get_latest_miab_version():
 	# This pings https://mailinabox.email/setup.sh and extracts the tag named in
@@ -927,7 +928,7 @@ def check_miab_version(env, output):
 		elif latest_ver is None:
 			output.print_error("Latest Mail-in-a-Box version could not be determined. You are running version %s." % this_ver)
 		else:
-			output.print_error(f"A new version of Mail-in-a-Box is available. You are running version {this_ver}. The latest version is {latest_ver}. For upgrade instructions, see https://mailinabox.email. ")
+			output.print_error(f"A new version of Mail-in-a-Box is available. You are running version {this_ver}. The latest version is {latest_ver}. Please contact Mantalus to schedule an upgrade as this requires additional testing. ")
 
 def run_and_output_changes(env, pool):
 	import json

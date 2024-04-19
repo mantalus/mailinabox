@@ -296,6 +296,10 @@ def provision_certificates(env, limit_domains):
 		os.mkdir(account_path)
 
 	# Provision certificates.
+	if domains:
+		print("Enabling port 80 inbound for the Let's Encrypt challenge...")
+		output = subprocess.check_output(["python", "/opt/bootstrap/update_sg_inbound.py"])
+		print(output)
 	for domain_list in certs:
 		ret.append({
 			"domains": domain_list,
@@ -367,6 +371,10 @@ def provision_certificates(env, limit_domains):
 			ret[-1]["result"] = "error"
 
 	# Run post-install steps.
+	if domains:
+		print("Disabling port 80...")
+		output = subprocess.check_output(["python", "/opt/bootstrap/update_sg_inbound.py", "--action", "remove"])
+		print(output)
 	ret.extend(post_install_func(env))
 
 	# Return what happened with each certificate request.
