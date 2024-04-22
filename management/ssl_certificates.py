@@ -689,7 +689,5 @@ def get_certificate_domains(cert):
 	return names, cn
 
 if __name__  == "__main__":
-	# Run the SSL certificate expiration checks script - send logs to cloudwatch
-	subprocess.run(["python", "/opt/bootstrap/ssl_cert_checker.py"])
 	# Provision certificates.
 	provision_certificates_cmdline()
