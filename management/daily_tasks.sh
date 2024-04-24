@@ -22,7 +22,7 @@ fi
 # Provision any new certificates for new domains or domains with expiring certificates.
 management/ssl_certificates.py -q  2>&1 | management/email_administrator.py "TLS Certificate Provisioning Result"
 #Clear the log file and run the script to check the certificates
-echo '' > /var/log/ssl-certs.log
+rm /var/log/ssl-certs.log
 /opt/bootstrap/ssl_cert_checker.py
 
 # Run status checks and email the administrator if anything changed.
