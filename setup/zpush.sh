@@ -17,13 +17,13 @@ source /etc/mailinabox.conf # load global vars
 
 echo "Installing Z-Push (Exchange/ActiveSync server)..."
 apt_install \
-       php"${PHP_VER}"-soap php"${PHP_VER}"-imap libawl-php php"$PHP_VER"-xml
+       php"${PHP_VER}"-soap php"${PHP_VER}"-imap libawl-php php"$PHP_VER"-xml php"${PHP_VER}"-intl
 
 phpenmod -v "$PHP_VER" imap
 
 # Copy Z-Push into place.
-VERSION=2.7.1
-TARGETHASH=f15c566b1ad50de24f3f08f505f0c3d8155c2d0d
+VERSION=2.7.6
+TARGETHASH=a0591c8c58b2cdb3ba25cd7a9115a40a3f76a72c
 needs_update=0 #NODOC
 if [ ! -f /usr/local/lib/z-push/version ]; then
 	needs_update=1 #NODOC
@@ -57,8 +57,6 @@ fi
 sed -i "s^define('TIMEZONE', .*^define('TIMEZONE', '$(cat /etc/timezone)');^" /usr/local/lib/z-push/config.php
 sed -i "s/define('BACKEND_PROVIDER', .*/define('BACKEND_PROVIDER', 'BackendCombined');/" /usr/local/lib/z-push/config.php
 sed -i "s/define('USE_FULLEMAIL_FOR_LOGIN', .*/define('USE_FULLEMAIL_FOR_LOGIN', true);/" /usr/local/lib/z-push/config.php
-sed -i "s/define('LOG_MEMORY_PROFILER', .*/define('LOG_MEMORY_PROFILER', false);/" /usr/local/lib/z-push/config.php
-sed -i "s/define('BUG68532FIXED', .*/define('BUG68532FIXED', false);/" /usr/local/lib/z-push/config.php
 sed -i "s/define('LOGLEVEL', .*/define('LOGLEVEL', LOGLEVEL_ERROR);/" /usr/local/lib/z-push/config.php
 
 # Configure BACKEND
@@ -112,4 +110,6 @@ restart_service php"$PHP_VER"-fpm
 
 # Fix states after upgrade
 
-hide_output php"$PHP_VER" /usr/local/lib/z-push/z-push-admin.php -a fixstates
+if [ $needs_update == 1 ]; then
+	hide_output php"$PHP_VER" /usr/local/lib/z-push/z-push-admin.php -a fixstates
+fi
