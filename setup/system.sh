@@ -112,7 +112,17 @@ hide_output add-apt-repository -y ppa:duplicity-team/duplicity-release-git
 
 # Stock PHP is now 8.1, but we're transitioning through 8.0 because
 # of Nextcloud.
-hide_output add-apt-repository --y ppa:ondrej/php
+# Add the ondrej/php PPA directly instead of using add-apt-repository, which
+# makes a synchronous call to the Launchpad REST API to fetch the signing key.
+# That API call intermittently fails with 504 Gateway Timeout during EC2 instance
+# bootstrap, causing the entire setup to fail. This approach fetches the key
+# directly from keyserver.ubuntu.com and writes the sources entry manually,
+# achieving the same result without the Launchpad dependency.
+curl -fsSL "https://keyserver.ubuntu.com/pks/lookup?op=get&search=0xB8DC7E53946656EFBCE4C1DD71DAEAAB4AD4CAB6" \
+    | gpg --dearmor \
+    | tee /usr/share/keyrings/ondrej-php.gpg > /dev/null
+echo "deb [signed-by=/usr/share/keyrings/ondrej-php.gpg] https://ppa.launchpadcontent.net/ondrej/php/ubuntu $(lsb_release -sc) main" \
+    > /etc/apt/sources.list.d/ondrej-ubuntu-php-$(lsb_release -sc).list
 
 # ### Update Packages
 
