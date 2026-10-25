@@ -5,7 +5,7 @@
 # -o pipefail: don't ignore errors in the non-last command in a pipeline
 set -euo pipefail
 
-PHP_VER=8.0
+PHP_VER=8.5
 
 function hide_output {
 	# This function hides the output of a command unless the command fails
@@ -191,13 +191,21 @@ function wget_verify {
 	HASH=$2
 	DEST=$3
 	CHECKSUM="$HASH  $DEST"
+	case ${#HASH} in
+		40) CHECKSUM_COMMAND=sha1sum ;;
+		64) CHECKSUM_COMMAND=sha256sum ;;
+		*)
+			echo "Unsupported checksum length for $URL."
+			exit 1
+			;;
+	esac
 	rm -f "$DEST"
 	hide_output wget -O "$DEST" "$URL"
-	if ! echo "$CHECKSUM" | sha1sum --check --strict > /dev/null; then
+	if ! echo "$CHECKSUM" | "$CHECKSUM_COMMAND" --check --strict > /dev/null; then
 		echo "------------------------------------------------------------"
 		echo "Download of $URL did not match expected checksum."
 		echo "Found:"
-		sha1sum "$DEST"
+		"$CHECKSUM_COMMAND" "$DEST"
 		echo
 		echo "Expected:"
 		echo "$CHECKSUM"

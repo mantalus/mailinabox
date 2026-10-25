@@ -22,8 +22,8 @@ apt_install \
 phpenmod -v "$PHP_VER" imap
 
 # Copy Z-Push into place.
-VERSION=2.7.1
-TARGETHASH=f15c566b1ad50de24f3f08f505f0c3d8155c2d0d
+VERSION=2.7.7
+TARGETHASH=7a8e0094adf216521ee491078f78e709cd68257d05a868b3992d5665c01d8790
 needs_update=0 #NODOC
 if [ ! -f /usr/local/lib/z-push/version ]; then
 	needs_update=1 #NODOC

@@ -56,6 +56,7 @@ tools/editconf.py /etc/php/"$PHP_VER"/fpm/php.ini -c ';' \
 # Configure the path environment for php-fpm
 tools/editconf.py /etc/php/"$PHP_VER"/fpm/pool.d/www.conf -c ';' \
 	env[PATH]=/usr/local/bin:/usr/bin:/bin \
+	listen=/run/php/php-fpm.sock \
 
 # Configure php-fpm based on the amount of memory the machine has
 # This is based on the nextcloud manual for performance tuning: https://docs.nextcloud.com/server/17/admin_manual/installation/server_tuning.html
