@@ -21,8 +21,8 @@ echo "Installing Nextcloud (contacts/calendar)..."
 #   we automatically install intermediate versions as needed.
 # * The hash is the SHA1 hash of the ZIP package, which you can find by just running this script and
 #   copying it from the error message when it doesn't match what is below.
-nextcloud_ver=26.0.12
-nextcloud_hash=b55e9f51171c0a9b9ab3686cf5c8ad1a4292ca15
+nextcloud_ver=27.1.11
+nextcloud_hash=9f30c01a021c2e5a9e7baff119955afb3c552ebc
 
 # Nextcloud apps
 # --------------
@@ -32,20 +32,20 @@ nextcloud_hash=b55e9f51171c0a9b9ab3686cf5c8ad1a4292ca15
 #   https://github.com/nextcloud/user_external/tags
 #
 # * For these three packages, contact, calendar and user_external, the hash is the SHA1 hash of
-# the ZIP package, which you can find by just running this script and copying it from
-# the error message when it doesn't match what is below:
+# the release tarball (from the releases/download URL, not the source archive), which you can
+# find by running: curl -sL <url> | sha1sum
 
 # Always ensure the versions are supported, see https://apps.nextcloud.com/apps/contacts
-contacts_ver=5.5.3
-contacts_hash=799550f38e46764d90fa32ca1a6535dccd8316e5
+contacts_ver=5.5.4
+contacts_hash=c4e3f2183a0088b829f8aa1b3af1f87c9a4c46a2
 
 # Always ensure the versions are supported, see https://apps.nextcloud.com/apps/calendar
-calendar_ver=4.6.6
-calendar_hash=e34a71669a52d997e319d64a984dcd041389eb22
+calendar_ver=4.7.20
+calendar_hash=12d876904e227156e39ca4335b18481b42a6d00f
 
 # Always ensure the versions are supported, see https://apps.nextcloud.com/apps/user_external
-user_external_ver=3.2.0
-user_external_hash=a494073dcdecbbbc79a9c77f72524ac9994d2eec
+user_external_ver=3.4.0
+user_external_hash=7f9d8f4dd6adb85a0e3d7622d85eeb7bfe53f3b4
 
 # Developer advice (test plan)
 # ----------------------------
@@ -105,11 +105,11 @@ InstallNextcloud() {
 	# their github repositories.
 	mkdir -p /usr/local/lib/owncloud/apps
 
-	wget_verify "https://github.com/nextcloud-releases/contacts/archive/refs/tags/v$version_contacts.tar.gz" "$hash_contacts" /tmp/contacts.tgz
+	wget_verify "https://github.com/nextcloud-releases/contacts/releases/download/v$version_contacts/contacts-v$version_contacts.tar.gz" "$hash_contacts" /tmp/contacts.tgz
 	tar xf /tmp/contacts.tgz -C /usr/local/lib/owncloud/apps/
 	rm /tmp/contacts.tgz
 
-	wget_verify "https://github.com/nextcloud-releases/calendar/archive/refs/tags/v$version_calendar.tar.gz" "$hash_calendar" /tmp/calendar.tgz
+	wget_verify "https://github.com/nextcloud-releases/calendar/releases/download/v$version_calendar/calendar-v$version_calendar.tar.gz" "$hash_calendar" /tmp/calendar.tgz
 	tar xf /tmp/calendar.tgz -C /usr/local/lib/owncloud/apps/
 	rm /tmp/calendar.tgz
 
@@ -131,7 +131,7 @@ InstallNextcloud() {
 	# Make sure permissions are correct or the upgrade step won't run.
 	# $STORAGE_ROOT/owncloud may not yet exist, so use -f to suppress
 	# that error.
-	chown -f -R www-data:www-data "$STORAGE_ROOT/owncloud /usr/local/lib/owncloud" || /bin/true
+	chown -f -R www-data:www-data "$STORAGE_ROOT/owncloud" /usr/local/lib/owncloud || /bin/true
 
 	# If this isn't a new installation, immediately run the upgrade script.
 	# Then check for success (0=ok and 3=no upgrade needed, both are success).
@@ -239,6 +239,10 @@ if [ ! -d /usr/local/lib/owncloud/ ] || [[ ! ${CURRENT_NEXTCLOUD_VER} =~ ^$nextc
 			InstallNextcloud 25.0.7 a5a565c916355005c7b408dd41a1e53505e1a080 5.3.0 4b0a6666374e3b55cfd2ae9b72e1d458b87d4c8c 4.4.2 21a42e15806adc9b2618760ef94f1797ef399e2f 3.2.0 a494073dcdecbbbc79a9c77f72524ac9994d2eec
 			CURRENT_NEXTCLOUD_VER="25.0.7"
 		fi
+		if [[ ${CURRENT_NEXTCLOUD_VER} =~ ^25 ]]; then
+			InstallNextcloud 26.0.13 d5c10b650e5396d5045131c6d22c02a90572527c 5.5.3 b234ab410480a4106176a28f39c9b27f471d0473 4.7.6 cf8e68e7d945ee71933f5bb71a969faf152da55c 3.3.0 280d24eb2a6cb56b4590af8847f925c28d8d853e
+			CURRENT_NEXTCLOUD_VER="26.0.13"
+		fi
 	fi
 
 	InstallNextcloud $nextcloud_ver $nextcloud_hash $contacts_ver $contacts_hash $calendar_ver $calendar_hash $user_external_ver $user_external_hash
@@ -274,15 +278,6 @@ if [ ! -f "$STORAGE_ROOT/owncloud/owncloud.db" ]; then
     ),
   ),
   'memcache.local' => '\OC\Memcache\APCu',
-  'mail_smtpmode' => 'sendmail',
-  'mail_smtpsecure' => '',
-  'mail_smtpauthtype' => 'LOGIN',
-  'mail_smtpauth' => false,
-  'mail_smtphost' => '',
-  'mail_smtpport' => '',
-  'mail_smtpname' => '',
-  'mail_smtppassword' => '',
-  'mail_from_address' => 'owncloud',
 );
 ?>
 EOF
@@ -333,17 +328,15 @@ php"$PHP_VER" <<EOF > "$CONFIG_TEMP" && mv "$CONFIG_TEMP" "$STORAGE_ROOT/ownclou
 include("$STORAGE_ROOT/owncloud/config.php");
 
 \$CONFIG['config_is_read_only'] = false;
+\$CONFIG['appstoreenabled'] = false; # https://discourse.mailinabox.email/t/problems-with-z-push-and-nextcloud-likely-after-package-updates-today/16460/21
 
 \$CONFIG['trusted_domains'] = array('$PRIMARY_HOSTNAME');
 
 \$CONFIG['memcache.local'] = '\OC\Memcache\APCu';
 \$CONFIG['overwrite.cli.url'] = 'https://${PRIMARY_HOSTNAME}/cloud';
-\$CONFIG['mail_from_address'] = 'administrator'; # just the local part, matches our master administrator address
 
 \$CONFIG['logtimezone'] = '$TIMEZONE';
 \$CONFIG['logdateformat'] = 'Y-m-d H:i:s';
-
-\$CONFIG['mail_domain'] = '$PRIMARY_HOSTNAME';
 
 \$CONFIG['user_backends'] = array(
   array(
@@ -353,6 +346,16 @@ include("$STORAGE_ROOT/owncloud/config.php");
     ),
   ),
 );
+
+\$CONFIG['mail_domain'] = '$PRIMARY_HOSTNAME';
+\$CONFIG['mail_from_address'] = 'administrator'; # just the local part, matches the required administrator alias on mail_domain/$PRIMARY_HOSTNAME
+\$CONFIG['mail_smtpmode'] = 'sendmail';
+\$CONFIG['mail_smtpauth'] = true; # if smtpmode is smtp
+\$CONFIG['mail_smtphost'] = '127.0.0.1'; # if smtpmode is smtp
+\$CONFIG['mail_smtpport'] = '587'; # if smtpmode is smtp
+\$CONFIG['mail_smtpsecure'] = ''; # if smtpmode is smtp, must be empty string
+\$CONFIG['mail_smtpname'] = ''; # if smtpmode is smtp, set this to a mail user
+\$CONFIG['mail_smtppassword'] = ''; # if smtpmode is smtp, set this to the user's password
 
 echo "<?php\n\\\$CONFIG = ";
 var_export(\$CONFIG);
@@ -415,8 +418,8 @@ sqlite3 "$STORAGE_ROOT/owncloud/owncloud.db" "UPDATE oc_users_external SET backe
 cat > /etc/cron.d/mailinabox-nextcloud << EOF;
 #!/bin/bash
 # Mail-in-a-Box
-*/5 * * * *	root	sudo -u www-data php$PHP_VER -f /usr/local/lib/owncloud/cron.php
-*/5 * * * *	root	sudo -u www-data php$PHP_VER -f /usr/local/lib/owncloud/occ dav:send-event-reminders
+*/5 * * * *	www-data	php$PHP_VER -f /usr/local/lib/owncloud/cron.php
+*/5 * * * *	www-data	php$PHP_VER -f /usr/local/lib/owncloud/occ dav:send-event-reminders
 EOF
 chmod +x /etc/cron.d/mailinabox-nextcloud
 

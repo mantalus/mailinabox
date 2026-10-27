@@ -14,7 +14,7 @@ def get_ssl_certificates(env):
 	# that the certificates are good for to the best certificate for
 	# the domain.
 
-	from cryptography.hazmat.primitives.asymmetric.rsa import RSAPrivateKey
+	from cryptography.hazmat.primitives.asymmetric import dsa, rsa, ec
 	from cryptography.x509 import Certificate
 
 	# The certificates are all stored here:
@@ -59,13 +59,13 @@ def get_ssl_certificates(env):
 			# Not a valid PEM format for a PEM type we care about.
 			continue
 
-		# Is it a private key?
-		if isinstance(pem, RSAPrivateKey):
-			private_keys[pem.public_key().public_numbers()] = { "filename": fn, "key": pem }
-
 		# Is it a certificate?
 		if isinstance(pem, Certificate):
 			certificates.append({ "filename": fn, "cert": pem })
+		# It is a private key
+		elif (isinstance(pem, (rsa.RSAPrivateKey, dsa.DSAPrivateKey, ec.EllipticCurvePrivateKey))):
+			private_keys[pem.public_key().public_numbers()] = { "filename": fn, "key": pem }
+
 
 	# Process the certificates.
 	domains = { }
@@ -158,14 +158,13 @@ def get_domain_ssl_files(domain, ssl_certificates, env, allow_missing_cert=False
 	wildcard_domain = re.sub(r"^[^\.]+", "*", domain)
 	if domain in ssl_certificates:
 		return ssl_certificates[domain]
-	elif wildcard_domain in ssl_certificates:
+	if wildcard_domain in ssl_certificates:
 		return ssl_certificates[wildcard_domain]
-	elif not allow_missing_cert:
+	if not allow_missing_cert:
 		# No valid certificate is available for this domain! Return default files.
 		return system_certificate
-	else:
-		# No valid certificate is available for this domain.
-		return None
+	# No valid certificate is available for this domain.
+	return None
 
 
 # PROVISIONING CERTIFICATES FROM LETSENCRYPT
@@ -442,7 +441,7 @@ def install_cert(domain, ssl_cert, ssl_chain, env, raw=False):
 			cert_status += " " + cert_status_details
 		return cert_status
 
-	# Copy certifiate into ssl directory.
+	# Copy certificate into ssl directory.
 	install_cert_copy_file(fn, env)
 
 	# Run post-install steps.
@@ -513,7 +512,7 @@ def check_certificate(domain, ssl_certificate, ssl_private_key, warn_if_expiring
 	# Check that the ssl_certificate & ssl_private_key files are good
 	# for the provided domain.
 
-	from cryptography.hazmat.primitives.asymmetric.rsa import RSAPrivateKey
+	from cryptography.hazmat.primitives.asymmetric import rsa, dsa, ec
 	from cryptography.x509 import Certificate
 
 	# The ssl_certificate file may contain a chain of certificates. We'll
@@ -524,7 +523,7 @@ def check_certificate(domain, ssl_certificate, ssl_private_key, warn_if_expiring
 		cert = load_pem(ssl_cert_chain[0])
 		if not isinstance(cert, Certificate): raise ValueError("This is not a certificate file.")
 	except ValueError as e:
-		return ("There is a problem with the certificate file: %s" % str(e), None)
+		return (f"There is a problem with the certificate file: {e!s}", None)
 
 	# First check that the domain name is one of the names allowed by
 	# the certificate.
@@ -536,8 +535,7 @@ def check_certificate(domain, ssl_certificate, ssl_private_key, warn_if_expiring
 		# should work in normal cases).
 		wildcard_domain = re.sub(r"^[^\.]+", "*", domain)
 		if domain not in certificate_names and wildcard_domain not in certificate_names:
-			return ("The certificate is for the wrong domain name. It is for %s."
-				% ", ".join(sorted(certificate_names)), None)
+			return ("The certificate is for the wrong domain name. It is for {}.".format(", ".join(sorted(certificate_names))), None)
 
 	# Second, check that the certificate matches the private key.
 	if ssl_private_key is not None:
@@ -547,11 +545,13 @@ def check_certificate(domain, ssl_certificate, ssl_private_key, warn_if_expiring
 		except ValueError as e:
 			return (f"The private key file {ssl_private_key} is not a private key file: {e!s}", None)
 
-		if not isinstance(priv_key, RSAPrivateKey):
-			return ("The private key file %s is not a private key file." % ssl_private_key, None)
+		if (not isinstance(priv_key, rsa.RSAPrivateKey)
+			and not isinstance(priv_key, dsa.DSAPrivateKey)
+			and not isinstance(priv_key, ec.EllipticCurvePrivateKey)):
+			return (f"The private key file {ssl_private_key} is not a private key file.", None)
 
 		if priv_key.public_key().public_numbers() != cert.public_key().public_numbers():
-			return ("The certificate does not correspond to the private key at %s." % ssl_private_key, None)
+			return (f"The certificate does not correspond to the private key at {ssl_private_key}.", None)
 
 		# We could also use the openssl command line tool to get the modulus
 		# listed in each file. The output of each command below looks like "Modulus=XXXXX".
@@ -595,34 +595,33 @@ def check_certificate(domain, ssl_certificate, ssl_private_key, warn_if_expiring
 		# Certificate is self-signed. Probably we detected this above.
 		return ("SELF-SIGNED", None)
 
-	elif retcode != 0:
+	if retcode != 0:
 		if "unable to get local issuer certificate" in verifyoutput:
-			return ("The certificate is missing an intermediate chain or the intermediate chain is incorrect or incomplete. (%s)" % verifyoutput, None)
+			return (f"The certificate is missing an intermediate chain or the intermediate chain is incorrect or incomplete. ({verifyoutput})", None)
 
 		# There is some unknown problem. Return the `openssl verify` raw output.
 		return ("There is a problem with the certificate.", verifyoutput.strip())
 
+	# `openssl verify` returned a zero exit status so the cert is currently
+	# good.
+
+	# But is it expiring soon?
+	cert_expiration_date = cert.not_valid_after
+	ndays = (cert_expiration_date-now).days
+	if not rounded_time or ndays <= 10:
+		# Yikes better renew soon!
+		expiry_info = "The certificate expires in %d days on %s." % (ndays, cert_expiration_date.date().isoformat())
 	else:
-		# `openssl verify` returned a zero exit status so the cert is currently
-		# good.
+		# We'll renew it with Lets Encrypt.
+		expiry_info = f"The certificate expires on {cert_expiration_date.date().isoformat()}."
 
-		# But is it expiring soon?
-		cert_expiration_date = cert.not_valid_after
-		ndays = (cert_expiration_date-now).days
-		if not rounded_time or ndays <= 10:
-			# Yikes better renew soon!
-			expiry_info = "The certificate expires in %d days on %s." % (ndays, cert_expiration_date.date().isoformat())
-		else:
-			# We'll renew it with Lets Encrypt.
-			expiry_info = "The certificate expires on %s." % cert_expiration_date.date().isoformat()
+	if warn_if_expiring_soon and ndays <= warn_if_expiring_soon:
+		# Warn on day 10 to give 4 days for us to automatically renew the
+		# certificate, which occurs on day 14.
+		return ("The certificate is expiring soon: " + expiry_info, None)
 
-		if warn_if_expiring_soon and ndays <= warn_if_expiring_soon:
-			# Warn on day 10 to give 4 days for us to automatically renew the
-			# certificate, which occurs on day 14.
-			return ("The certificate is expiring soon: " + expiry_info, None)
-
-		# Return the special OK code.
-		return ("OK", expiry_info)
+	# Return the special OK code.
+	return ("OK", expiry_info)
 
 def load_cert_chain(pemfile):
 	# A certificate .pem file may contain a chain of certificates.
@@ -647,7 +646,7 @@ def load_pem(pem):
 		msg = "File is not a valid PEM-formatted file."
 		raise ValueError(msg)
 	pem_type = pem_type.group(1)
-	if pem_type in {b"RSA PRIVATE KEY", b"PRIVATE KEY"}:
+	if pem_type.endswith(b"PRIVATE KEY"):
 		return serialization.load_pem_private_key(pem, password=None, backend=default_backend())
 	if pem_type == b"CERTIFICATE":
 		return load_pem_x509_certificate(pem, default_backend())
@@ -676,13 +675,11 @@ def get_certificate_domains(cert):
 	def idna_decode_dns_name(dns_name):
 		if dns_name.startswith("*."):
 			return "*." + idna.encode(dns_name[2:]).decode('ascii')
-		else:
-			return idna.encode(dns_name).decode('ascii')
+		return idna.encode(dns_name).decode('ascii')
 
 	try:
 		sans = cert.extensions.get_extension_for_oid(OID_SUBJECT_ALTERNATIVE_NAME).value.get_values_for_type(DNSName)
-		for san in sans:
-			names.add(idna_decode_dns_name(san))
+		names.update(idna_decode_dns_name(san) for san in sans)
 	except ExtensionNotFound:
 		pass
 

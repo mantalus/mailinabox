@@ -52,7 +52,7 @@ def get_domains_with_a_records(env):
 	domains = set()
 	dns = get_custom_dns_config(env)
 	for domain, rtype, value in dns:
-		if rtype == "CNAME" or (rtype in {"A", "AAAA"} and value not in {"local", env['PUBLIC_IP']}):
+		if rtype == "CNAME" or (rtype in {"A", "AAAA"} and value not in {"local", env['PUBLIC_IP'], env['PUBLIC_IPV6']}):
 			domains.add(domain)
 	return domains
 
@@ -166,7 +166,8 @@ def make_domain_config(domain, templates, ssl_certificates, env):
 				pass_http_host_header = False
 				proxy_redirect_off = False
 				frame_options_header_sameorigin = False
-				m = re.search("#(.*)$", url)
+				web_sockets = False
+				m = re.search(r"#(.*)$", url)
 				if m:
 					for flag in m.group(1).split(","):
 						if flag == "pass-http-host":
@@ -175,24 +176,30 @@ def make_domain_config(domain, templates, ssl_certificates, env):
 							proxy_redirect_off = True
 						elif flag == "frame-options-sameorigin":
 							frame_options_header_sameorigin = True
-					url = re.sub("#(.*)$", "", url)
+						elif flag == "web-sockets":
+							web_sockets = True
+					url = re.sub(r"#(.*)$", "", url)
 
-				nginx_conf_extra += "\tlocation %s {" % path
-				nginx_conf_extra += "\n\t\tproxy_pass %s;" % url
+				nginx_conf_extra += f"\tlocation {path} {{"
+				nginx_conf_extra += f"\n\t\tproxy_pass {url};"
 				if proxy_redirect_off:
 					nginx_conf_extra += "\n\t\tproxy_redirect off;"
 				if pass_http_host_header:
 					nginx_conf_extra += "\n\t\tproxy_set_header Host $http_host;"
 				if frame_options_header_sameorigin:
 					nginx_conf_extra += "\n\t\tproxy_set_header X-Frame-Options SAMEORIGIN;"
+				if web_sockets:
+					nginx_conf_extra += "\n\t\tproxy_http_version 1.1;"
+					nginx_conf_extra += "\n\t\tproxy_set_header Upgrade $http_upgrade;"
+					nginx_conf_extra += "\n\t\tproxy_set_header Connection 'Upgrade';"
 				nginx_conf_extra += "\n\t\tproxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;"
 				nginx_conf_extra += "\n\t\tproxy_set_header X-Forwarded-Host $http_host;"
 				nginx_conf_extra += "\n\t\tproxy_set_header X-Forwarded-Proto $scheme;"
 				nginx_conf_extra += "\n\t\tproxy_set_header X-Real-IP $remote_addr;"
 				nginx_conf_extra += "\n\t}\n"
 			for path, alias in yaml.get("aliases", {}).items():
-				nginx_conf_extra += "\tlocation %s {" % path
-				nginx_conf_extra += "\n\t\talias %s;" % alias
+				nginx_conf_extra += f"\tlocation {path} {{"
+				nginx_conf_extra += f"\n\t\talias {alias};"
 				nginx_conf_extra += "\n\t}\n"
 			for path, url in yaml.get("redirects", {}).items():
 				nginx_conf_extra += f"\trewrite {path} {url} permanent;\n"
@@ -209,7 +216,7 @@ def make_domain_config(domain, templates, ssl_certificates, env):
 	# Add in any user customizations in the includes/ folder.
 	nginx_conf_custom_include = os.path.join(env["STORAGE_ROOT"], "www", safe_domain_name(domain) + ".conf")
 	if os.path.exists(nginx_conf_custom_include):
-		nginx_conf_extra += "\tinclude %s;\n" % (nginx_conf_custom_include)
+		nginx_conf_extra += f"\tinclude {nginx_conf_custom_include};\n"
 	# PUT IT ALL TOGETHER
 
 	# Combine the pieces. Iteratively place each template into the "# ADDITIONAL DIRECTIVES HERE" placeholder
@@ -249,10 +256,9 @@ def get_web_domains_info(env):
 		cert_status, cert_status_details = check_certificate(domain, tls_cert["certificate"], tls_cert["private-key"])
 		if cert_status == "OK":
 			return ("success", "Signed & valid. " + cert_status_details)
-		elif cert_status == "SELF-SIGNED":
+		if cert_status == "SELF-SIGNED":
 			return ("warning", "Self-signed. Get a signed certificate to stop warnings.")
-		else:
-			return ("danger", "Certificate has a problem: " + cert_status)
+		return ("danger", "Certificate has a problem: " + cert_status)
 
 	return [
 		{

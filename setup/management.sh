@@ -54,7 +54,7 @@ hide_output $venv/bin/pip install --upgrade \
 # Create a backup directory and a random key for encrypting backups.
 mkdir -p "$STORAGE_ROOT/backup"
 if [ ! -f "$STORAGE_ROOT/backup/secret_key.txt" ]; then
-	umask 077; openssl rand -base64 2048 > "$STORAGE_ROOT/backup/secret_key.txt"
+	(umask 077; openssl rand -base64 2048 > "$STORAGE_ROOT/backup/secret_key.txt")
 fi
 
 
@@ -101,7 +101,7 @@ chmod 640 /var/lib/mailinabox/api.key
 
 source $venv/bin/activate
 export PYTHONPATH=$PWD/management
-exec gunicorn -b localhost:10222 -w 1 --timeout 630 wsgi:app
+exec gunicorn -b 127.0.0.1:10222 -w 1 --timeout 630 wsgi:app
 EOF
 chmod +x $inst_dir/start
 cp --remove-destination conf/mailinabox.service /lib/systemd/system/mailinabox.service # target was previously a symlink so remove it first
@@ -116,7 +116,7 @@ minute=$((RANDOM % 60))  # avoid overloading mailinabox.email
 cat > /etc/cron.d/mailinabox-nightly << EOF;
 # Mail-in-a-Box --- Do not edit / will be overwritten on update.
 # Run nightly tasks: backup, status checks.
-$minute 3 * * *	root	(cd $PWD && management/daily_tasks.sh)
+$minute 1 * * *	root	(cd $PWD && management/daily_tasks.sh)
 EOF
 
 # Start the management server.
